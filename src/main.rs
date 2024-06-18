@@ -29,6 +29,8 @@ struct Fill {
     matched_id: i64,
     volume: i64,
     price: Decimal,
+    taker_id: i64,
+    maker_id: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -92,6 +94,8 @@ impl OrderBook {
                                 matched_id: self.match_id,
                                 volume: trade_quantity,
                                 price: ask_price,
+                                taker_id: order.id,
+                                maker_id:ask_order.id
                             });
 
                             ask_order.quantity -= trade_quantity;
@@ -140,6 +144,8 @@ impl OrderBook {
                                 matched_id: self.match_id,
                                 volume: trade_quantity,
                                 price: bid_price,
+                                taker_id: order.id,
+                                maker_id:bid_order.id
                             });
 
                             bid_order.quantity -= trade_quantity;
@@ -258,7 +264,7 @@ fn main() {
         side: Side::Sell,
     };
 
-    // We have executions
+    // We have 
     let fills = order_book.add_order(order4);
 
     print_fills(&fills);
