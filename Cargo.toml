@@ -1,0 +1,8 @@
+[package]
+name = "riverside_project"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rust_decimal = "1.34.2" # Check for the latest version on crates.io
+rust_decimal_macros = "1.34.2"
