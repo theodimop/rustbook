@@ -1,18 +1,27 @@
-use std::collections::BTreeMap;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
+use std::collections::{BTreeMap, HashMap};
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 enum Side {
-    Bid,
-    Ask,
+    Buy,
+    Sell,
 }
-
+impl fmt::Display for Side {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Side::Buy => write!(f, "Buy"),
+            Side::Sell => write!(f, "Sell"),
+        }
+    }
+}
 #[derive(Debug, Clone)]
 struct Order {
-    id: String,
+    id: i64,
     price: Decimal,
     quantity: i64,
+    side: Side,
 }
 
 #[derive(Debug, Clone)]
@@ -26,7 +35,8 @@ struct Fill {
 struct OrderBook {
     bids: BTreeMap<Decimal, Vec<Order>>,
     asks: BTreeMap<Decimal, Vec<Order>>,
-    match_id: i64
+    orders: HashMap<i64, Order>,
+    match_id: i64,
 }
 
 impl OrderBook {
@@ -34,7 +44,8 @@ impl OrderBook {
         OrderBook {
             bids: BTreeMap::new(),
             asks: BTreeMap::new(),
-            match_id: 0
+            orders: HashMap::new(),
+            match_id: 0,
         }
     }
 
@@ -44,7 +55,10 @@ impl OrderBook {
 
         for (price, orders) in self.asks.iter().rev() {
             for order in orders {
-                println!("{:<8} {:<8} {:<8} {:<8}", order.id, "Sell", order.quantity, price);
+                println!(
+                    "{:<8} {:<8} {:<8} {:<8}",
+                    order.id, order.side, order.quantity, price
+                );
             }
         }
 
@@ -52,15 +66,18 @@ impl OrderBook {
 
         for (price, orders) in self.bids.iter().rev() {
             for order in orders {
-                println!("{:<8} {:<8} {:<8} {:<8}", order.id, "Buy", order.quantity, price);
+                println!(
+                    "{:<8} {:<8} {:<8} {:<8}",
+                    order.id, order.side, order.quantity, price
+                );
             }
         }
     }
 
-    fn add_order(&mut self, mut order: Order, side: Side) -> Vec<Fill> {
+    fn add_order(&mut self, mut order: Order) -> Vec<Fill> {
         let mut fills = Vec::new();
 
-        if side == Side::Bid {
+        if order.side == Side::Buy {
             while order.quantity > 0 {
                 if let Some((&ask_price, ask_orders)) = self.asks.iter_mut().next() {
                     if order.price >= ask_price {
@@ -81,6 +98,7 @@ impl OrderBook {
                             remaining_quantity -= trade_quantity;
 
                             if ask_order.quantity == 0 {
+                                self.orders.remove(&ask_order.id);
                                 ask_orders.remove(i);
                             } else {
                                 i += 1;
@@ -101,7 +119,11 @@ impl OrderBook {
             }
 
             if order.quantity > 0 {
-                self.bids.entry(order.price).or_insert_with(Vec::new).push(order);
+                self.orders.insert(order.id, order.clone());
+                self.bids
+                    .entry(order.price)
+                    .or_insert_with(Vec::new)
+                    .push(order);
             }
         } else {
             while order.quantity > 0 {
@@ -124,6 +146,7 @@ impl OrderBook {
                             remaining_quantity -= trade_quantity;
 
                             if bid_order.quantity == 0 {
+                                self.orders.remove(&bid_order.id);
                                 bid_orders.remove(i);
                             } else {
                                 i += 1;
@@ -144,10 +167,34 @@ impl OrderBook {
             }
 
             if order.quantity > 0 {
-                self.asks.entry(order.price).or_insert_with(Vec::new).push(order);
+                self.orders.insert(order.id, order.clone());
+                self.asks
+                    .entry(order.price)
+                    .or_insert_with(Vec::new)
+                    .push(order);
             }
-        } 
+        }
         fills
+    }
+
+    fn remove_order(&mut self, id: i64) -> Option<Order> {
+        if let Some(order) = self.orders.remove(&id) {
+            let book_side = match order.side {
+                Side::Buy => &mut self.bids,
+                Side::Sell => &mut self.asks,
+            };
+
+            if let Some(orders) = book_side.get_mut(&order.price) {
+                if let Some(pos) = orders.iter().position(|o| o.id == order.id) {
+                    orders.remove(pos);
+                    if orders.is_empty() {
+                        book_side.remove(&order.price);
+                    }
+                    return Some(order);
+                }
+            }
+        }
+        return Option::None;
     }
 }
 
@@ -155,7 +202,10 @@ fn print_fills(fills: &[Fill]) {
     println!("## Fills");
     println!("{:<10} {:<8} {:<8}", "MatchedId", "Volume", "Price");
     for fill in fills {
-        println!("{:<10} {:<8} {:<8}", fill.matched_id, fill.volume, fill.price);
+        println!(
+            "{:<10} {:<8} {:<8}",
+            fill.matched_id, fill.volume, fill.price
+        );
     }
     println!()
 }
@@ -164,33 +214,40 @@ fn main() {
     let mut order_book = OrderBook::new();
 
     let order1 = Order {
-        id: "order1".to_string(),
+        id: 1,
         price: dec!(100.0),
         quantity: 10,
+        side: Side::Buy,
     };
     let order2 = Order {
-        id: "order2".to_string(),
+        id: 2,
         price: dec!(100.0),
         quantity: 5,
+        side: Side::Buy,
     };
     let order3 = Order {
-        id: "order3".to_string(),
+        id: 3,
         price: dec!(101.0),
         quantity: 7,
+        side: Side::Buy,
     };
 
-    order_book.add_order(order1, Side::Bid);
-    order_book.add_order(order2, Side::Bid);
-    order_book.add_order(order3, Side::Bid);
+    order_book.add_order(order1);
+    order_book.add_order(order2);
+    order_book.add_order(order3);
 
     let order4 = Order {
-        id: "order4".to_string(),
+        id: 4,
         price: dec!(99.0),
         quantity: 18,
+        side: Side::Sell,
     };
 
-    let fills = order_book.add_order(order4, Side::Ask); 
+    let fills = order_book.add_order(order4);
 
     print_fills(&fills);
+    order_book.print_book();
+
+    order_book.remove_order(2);
     order_book.print_book();
 }
