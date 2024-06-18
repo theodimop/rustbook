@@ -1,6 +1,6 @@
 # Install 
-$ cargo build
-$ cargo run
+`$ cargo build`
+`$ cargo run`
 
 # Notes
 - Input validation has not been implemented. Quantity is expected to be always positive
