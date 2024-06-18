@@ -196,6 +196,21 @@ impl OrderBook {
         }
         return Option::None;
     }
+
+    fn update_order(&mut self, id: i64, price: Option<Decimal>, qty: Option<i64>) -> Vec<Fill> {
+        if let Some(mut order) = self.remove_order(id) {
+            if let Some(price) = price {
+                order.price = price;
+            }
+
+            if let Some(qty) = qty  {
+                order.quantity = qty;
+            }
+           return  self.add_order(order); 
+        } else {
+            return Vec::new();
+        }
+    }
 }
 
 fn print_fills(fills: &[Fill]) {
@@ -243,11 +258,23 @@ fn main() {
         side: Side::Sell,
     };
 
+    // We have executions
     let fills = order_book.add_order(order4);
 
     print_fills(&fills);
     order_book.print_book();
 
-    order_book.remove_order(2);
+
+    let order5 = Order {
+        id: 1,
+        price: dec!(100.0),
+        quantity: 10,
+        side: Side::Buy,
+    };
+
+    // Update order loses its priority
+    order_book.add_order(order5);
+    order_book.update_order(2, Option::None, Some(87));
+
     order_book.print_book();
 }
